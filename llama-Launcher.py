@@ -3,7 +3,7 @@ import os
 import shlex
 import subprocess
 import json
-import base64
+import tempfile
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -35,6 +35,8 @@ DARK = {
     "text":       "#e8eaf0",
     "text_dim":   "#6b7280",
     "text_muted": "#3d4147",
+    "log_normal": "#ffffff",   # pure white in dark mode
+    "log_error":  "#ff5f6d",
 }
 
 LIGHT = {
@@ -49,13 +51,29 @@ LIGHT = {
     "text":       "#212529",
     "text_dim":   "#495057",
     "text_muted": "#adb5bd",
+    "log_normal": "#000000",   # pure black in light mode
+    "log_error":  "#c92a2a",
 }
 
-_RAW_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>'
-_B64_CHECK_ICON = base64.b64encode(_RAW_SVG.encode('utf-8')).decode('utf-8')
+def _make_check_icon_file():
+    """Write checkmark SVG to a temp file; return a Qt-safe path for use in QSS.
+    Qt's stylesheet parser does NOT support data: URIs, so a real file is required.
+    """
+    # svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white">'
+    #        '<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>')
+
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">'
+           '<polyline points="4 12 10 17 20 6" stroke="#1E1E1E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
+           '</svg>')
+    tmp = tempfile.NamedTemporaryFile(suffix='.svg', delete=False, mode='w', encoding='utf-8')
+    tmp.write(svg)
+    tmp.close()
+    return tmp.name.replace('\\', '/')   # Qt requires forward slashes on all platforms
+
+_CHECK_ICON_PATH = _make_check_icon_file()
 
 def get_qss(theme):
-    check_icon_url = f"url(data:image/svg+xml;base64,{_B64_CHECK_ICON})"
+    check_icon_url = f"url({_CHECK_ICON_PATH})"
 
     return f"""
     QMainWindow, QWidget {{ background: {theme['bg']}; color: {theme['text']}; }}
@@ -163,6 +181,7 @@ def get_qss(theme):
         font-weight: 600; font-size: 14px; padding: 10px 28px; border-radius: 8px;
     }}
     QPushButton#danger:hover {{ background: #ff7a85; }}
+    QPushButton#danger:disabled {{ background: {theme['surface2']}; border-color: {theme['border']}; color: {theme['text_dim']}; }}
 
     QPushButton#browse {{
         padding: 7px 12px; min-width: 32px; max-width: 36px;
@@ -183,7 +202,7 @@ def get_qss(theme):
     /* TextEdit (log & cmd) */
     QTextEdit {{
         background: {theme['bg']}; border: 1px solid {theme['border']};
-        border-radius: 6px; color: {theme['accent2']}; font-family: 'Cascadia Code', 'Fira Code', monospace;
+        border-radius: 6px; color: {theme['text']}; font-family: 'Cascadia Code', 'Fira Code', monospace;
         font-size: 12px; padding: 8px;
         selection-background-color: {theme['accent']};
     }}
@@ -597,8 +616,8 @@ class MainWindow(QMainWindow):
         self._process = None
         self._param_rows: list[ParamRow] = []
         self._settings_path = Path.home() / ".llamalauncher_settings.json"
+        self._log_entries = []
 
-        # Quick setting checkbox references
         self._qs_cbs = {}
 
         self._build_ui()
@@ -608,7 +627,6 @@ class MainWindow(QMainWindow):
     # ── HELPERS ───────────────────────────────────────────────────────────────
 
     def _make_qs_cell(self, label_text, input_widget):
-        """Create a quick-settings cell: [enable_cb] [label] [input]."""
         cell = QWidget()
         h = QHBoxLayout(cell)
         h.setContentsMargins(0, 2, 0, 2)
@@ -626,7 +644,6 @@ class MainWindow(QMainWindow):
         h.addWidget(lbl)
         h.addWidget(input_widget, 1)
 
-        # Toggle input + label enabled state when checkbox changes
         def _toggle(enabled):
             input_widget.setEnabled(enabled)
             lbl.setEnabled(enabled)
@@ -887,7 +904,6 @@ class MainWindow(QMainWindow):
         layout.setVerticalSpacing(8)
         layout.setHorizontalSpacing(6)
 
-        # ── Row 0: Context, GPU Layers, Batch ─────────────────────────────────
         self.qs_ctx = self._qs_spin(4096, 0, 1048576, 512)
         c0, cb0 = self._make_qs_cell("Context", self.qs_ctx)
         self._qs_cbs["ctx"] = cb0
@@ -903,7 +919,6 @@ class MainWindow(QMainWindow):
         self._qs_cbs["batch"] = cb2
         layout.addWidget(c2, 0, 4, 1, 2)
 
-        # ── Row 1: Threads, Parallel, Port ────────────────────────────────────
         self.qs_threads = self._qs_spin(-1, -1, 512, 1)
         c3, cb3 = self._make_qs_cell("Threads", self.qs_threads)
         self._qs_cbs["threads"] = cb3
@@ -919,7 +934,6 @@ class MainWindow(QMainWindow):
         self._qs_cbs["port"] = cb5
         layout.addWidget(c5, 1, 4, 1, 2)
 
-        # ── Row 2: Temperature, Top-P, Host ───────────────────────────────────
         self.qs_temp = self._qs_dspin(0.8, 0.0, 5.0, 0.05)
         c6, cb6 = self._make_qs_cell("Temp", self.qs_temp)
         self._qs_cbs["temp"] = cb6
@@ -935,7 +949,6 @@ class MainWindow(QMainWindow):
         self._qs_cbs["host"] = cb8
         layout.addWidget(c8, 2, 4, 1, 2)
 
-        # ── Row 3: Flash Attn, Cont Batch, KV Cache ───────────────────────────
         self.qs_fa = QComboBox()
         for x in ["auto", "on", "off"]:
             self.qs_fa.addItem(x)
@@ -956,7 +969,6 @@ class MainWindow(QMainWindow):
         self._qs_cbs["kv"] = cb11
         layout.addWidget(c11, 3, 4, 1, 2)
 
-        # ── Connect all signals to command preview ────────────────────────────
         for w in [self.qs_ctx, self.qs_gpu, self.qs_batch, self.qs_threads,
                   self.qs_parallel, self.qs_port, self.qs_temp, self.qs_topp]:
             w.valueChanged.connect(self._update_cmd_preview)
@@ -967,7 +979,6 @@ class MainWindow(QMainWindow):
         for cb in self._qs_cbs.values():
             cb.stateChanged.connect(self._update_cmd_preview)
 
-        # ── Row 4: Buttons ────────────────────────────────────────────────────
         btn_row = QHBoxLayout()
         self.start_btn = QPushButton("▶  Launch Server")
         self.start_btn.setObjectName("primary")
@@ -1008,7 +1019,7 @@ class MainWindow(QMainWindow):
         header.addWidget(cmd_lbl)
 
         copy_btn = QPushButton("Copy")
-        copy_btn.setFixedWidth(60)
+        copy_btn.setFixedWidth(66)
         copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(self.cmd_preview.toPlainText()))
         header.addStretch()
         header.addWidget(copy_btn)
@@ -1040,6 +1051,7 @@ class MainWindow(QMainWindow):
             self._current_theme = DARK
         self.setStyleSheet(get_qss(self._current_theme))
         self._refresh_cmd_style()
+        self._refresh_log_colors()
         self._save_settings()
 
     # ── PARAM SEARCH ──────────────────────────────────────────────────────────
@@ -1081,24 +1093,14 @@ class MainWindow(QMainWindow):
                 section._toggle(True)
 
     # ── COMMAND BUILDING ──────────────────────────────────────────────────────
-    #
-    # Uses an ordered dict so that later entries OVERRIDE earlier ones with the
-    # same flag key.  Quick-settings are inserted first; advanced params are
-    # inserted second and therefore win when the same flag appears in both.
 
     def _build_args(self):
-        """Return (exe, structured_args) where structured_args is a list of
-        (flag, value_or_None) tuples.  Use _flatten_args() to get a plain
-        string list suitable for QProcess.start()."""
+        args_map = {}
 
-        args_map = {}  # flag_string -> value (None for flag-only)
-
-        # Model
         model = self.model_edit.text().strip()
         if model:
             args_map["-m"] = model
 
-        # ── Quick settings (only when their enable-checkbox is on) ────────────
         if self._qs_cbs["ctx"].isChecked():
             args_map["--ctx-size"] = str(self.qs_ctx.value())
 
@@ -1129,36 +1131,30 @@ class MainWindow(QMainWindow):
         if self._qs_cbs["fa"].isChecked():
             args_map["--flash-attn"] = self.qs_fa.currentText()
 
-        # Cont-batching: when QS enabled + inner checkbox unchecked → --no-cont-batching
         if self._qs_cbs["cb"].isChecked():
             if not self.qs_cb.isChecked():
                 args_map["--cont-batching"] = _CONT_BATCHING_OFF
-            # If inner is checked, default behaviour – don't add anything
 
         if self._qs_cbs["kv"].isChecked():
             kv_val = self.qs_kv.currentText()
             if kv_val != "f16":
                 args_map["--cache-type-k"] = kv_val
 
-        # ── File pickers ──────────────────────────────────────────────────────
         for row in [self.mmproj_row, self.draft_model_row, self.vocoder_row, self.lora_row]:
             fa = row.get_flag_args()
             if fa:
                 args_map[fa[0]] = fa[1] if len(fa) > 1 else None
 
-        # Log file
         if self.log_file_cb.isChecked() and self.log_file_edit.text().strip():
             args_map["--log-file"] = self.log_file_edit.text().strip()
 
-        # ── Advanced params — these OVERRIDE any quick-setting with the same flag
         for row in self._param_rows:
             fa = row.get_flag_args()
             if fa:
                 flag = fa[0]
                 val = fa[1] if len(fa) > 1 else None
-                args_map[flag] = val  # <-- override
+                args_map[flag] = val
 
-        # ── Convert dict → list of (flag, value) tuples ───────────────────────
         structured = []
         for flag, val in args_map.items():
             if flag == "--cont-batching" and val is _CONT_BATCHING_OFF:
@@ -1171,7 +1167,6 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _flatten_args(structured):
-        """Convert [(flag, val), …] → [flag, val, flag, val, …] for QProcess."""
         flat = []
         for flag, val in structured:
             flat.append(flag)
@@ -1223,51 +1218,75 @@ class MainWindow(QMainWindow):
 
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
-        self._set_status(f"Starting server at {self.qs_host.text()}:{self.qs_port.value()}...", "idle")
-        self._append_log(f"[Launcher] Starting: {exe} ...\n", self._current_theme['accent2'])
+        self._set_status(f"Starting server at {self.qs_host.text()}:{self.qs_port.value()}...", "running")
+        self._append_log(f"[Launcher] Starting: {exe} ...\n", "accent2")
 
         self._process.start(exe, args)
 
     def _stop_server(self):
         if self._process and self._process.state() != QProcess.ProcessState.NotRunning:
+            self.stop_btn.setEnabled(False)
+            self.start_btn.setEnabled(False)
+            self._set_status("Stopping server...", "idle")
+            self._append_log("[Launcher] Stopping server...\n", "danger")
             self._process.terminate()
             if not self._process.waitForFinished(3000):
                 self._process.kill()
-        self.start_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self._set_status("Server stopped", "idle")
-        self._append_log("[Launcher] Server stopped.\n", self._current_theme['danger'])
+                self._process.waitForFinished(2000)
+        else:
+            self.start_btn.setEnabled(True)
+            self.stop_btn.setEnabled(False)
+            self._set_status("Server stopped", "idle")
 
     def _on_stdout(self):
         data = self._process.readAllStandardOutput().data().decode("utf-8", errors="replace")
-        self._append_log(data)
+        self._append_log(data, "log_normal")
 
     def _on_stderr(self):
         data = self._process.readAllStandardError().data().decode("utf-8", errors="replace")
-        self._append_log(data, "#ffd080")
+        self._append_log(data, "log_error")
 
     def _on_process_finished(self, code, status):
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self._set_status(f"Server exited (code {code})", "idle")
-        self._append_log(f"[Launcher] Process finished with code {code}\n", self._current_theme['text_dim'])
+        self._append_log(f"[Launcher] Process finished with code {code}\n", "text_dim")
 
     def _on_process_error(self, error):
-        self._append_log(f"[Launcher] Process error: {error}\n", self._current_theme['danger'])
+        self._append_log(f"[Launcher] Process error: {error}\n", "danger")
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self._set_status("Error starting server", "error")
 
-    def _append_log(self, text, color=None):
+    def _append_log(self, text, color_key=None):
+        self._log_entries.append((text, color_key))
+        self._insert_log_entry(text, color_key)
+
+    def _insert_log_entry(self, text, color_key=None):
+        """Insert a log entry using the current theme's color for the given key.
+
+        Falls back to 'log_normal' (pure white in dark, pure black in light)
+        for any key that isn't present in the theme dict.
+        """
         cursor = self.log_output.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
-        if color:
-            fmt = QTextCharFormat()
-            fmt.setForeground(QColor(color))
-            cursor.setCharFormat(fmt)
+        fmt = QTextCharFormat()
+        resolved_key = color_key if color_key and color_key in self._current_theme else "log_normal"
+        fmt.setForeground(QColor(self._current_theme[resolved_key]))
+        cursor.setCharFormat(fmt)
         cursor.insertText(text)
         self.log_output.setTextCursor(cursor)
         self.log_output.ensureCursorVisible()
+
+    def _refresh_log_colors(self):
+        self.log_output.blockSignals(True)
+        self.log_output.clear()
+        self.log_output.blockSignals(False)
+        for text, color_key in self._log_entries:
+            self._insert_log_entry(text, color_key)
+        cursor = self.log_output.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self.log_output.setTextCursor(cursor)
 
     # ── FILE BROWSING ─────────────────────────────────────────────────────────
 
@@ -1301,7 +1320,6 @@ class MainWindow(QMainWindow):
             "theme": self._current_theme["name"],
             "exe": self.exe_edit.text(),
             "model": self.model_edit.text(),
-            # Quick-setting values
             "qs_ctx": self.qs_ctx.value(),
             "qs_gpu": self.qs_gpu.value(),
             "qs_batch": self.qs_batch.value(),
@@ -1314,7 +1332,6 @@ class MainWindow(QMainWindow):
             "qs_fa": self.qs_fa.currentText(),
             "qs_cb": self.qs_cb.isChecked(),
             "qs_kv": self.qs_kv.currentText(),
-            # Quick-setting enable checkboxes
             "qs_ctx_on": self._qs_cbs["ctx"].isChecked(),
             "qs_gpu_on": self._qs_cbs["gpu"].isChecked(),
             "qs_batch_on": self._qs_cbs["batch"].isChecked(),
@@ -1350,7 +1367,6 @@ class MainWindow(QMainWindow):
             self.exe_edit.setText(data.get("exe", ""))
             self.model_edit.setText(data.get("model", ""))
 
-            # Quick-setting values
             self.qs_ctx.setValue(data.get("qs_ctx", 4096))
             self.qs_gpu.setValue(data.get("qs_gpu", 99))
             self.qs_batch.setValue(data.get("qs_batch", 2048))
@@ -1368,7 +1384,6 @@ class MainWindow(QMainWindow):
             if idx >= 0:
                 self.qs_kv.setCurrentIndex(idx)
 
-            # Quick-setting enable checkboxes
             self._qs_cbs["ctx"].setChecked(data.get("qs_ctx_on", True))
             self._qs_cbs["gpu"].setChecked(data.get("qs_gpu_on", True))
             self._qs_cbs["batch"].setChecked(data.get("qs_batch_on", True))
@@ -1381,6 +1396,8 @@ class MainWindow(QMainWindow):
             self._qs_cbs["fa"].setChecked(data.get("qs_fa_on", True))
             self._qs_cbs["cb"].setChecked(data.get("qs_cb_on", True))
             self._qs_cbs["kv"].setChecked(data.get("qs_kv_on", True))
+
+            self._refresh_log_colors()
 
         except Exception:
             pass
@@ -1395,7 +1412,6 @@ class MainWindow(QMainWindow):
         self.model_edit.clear()
         self.exe_edit.clear()
 
-        # Reset quick-setting values to defaults
         self.qs_ctx.setValue(4096)
         self.qs_gpu.setValue(99)
         self.qs_batch.setValue(2048)
@@ -1409,15 +1425,12 @@ class MainWindow(QMainWindow):
         self.qs_cb.setChecked(True)
         self.qs_kv.setCurrentIndex(0)
 
-        # Re-enable all quick-setting checkboxes
         for cb in self._qs_cbs.values():
             cb.setChecked(True)
 
-        # Reset file pickers
         for row in [self.mmproj_row, self.draft_model_row, self.vocoder_row, self.lora_row]:
             row.reset()
 
-        # Reset advanced params
         for row in self._param_rows:
             row.reset()
 
@@ -1439,8 +1452,6 @@ class MainWindow(QMainWindow):
                 section._toggle(expand)
 
     def _set_status(self, msg, state="idle"):
-        colors = {"idle": self._current_theme['text_dim'], "running": self._current_theme['accent2'],
-                  "error": self._current_theme['danger']}
         self.statusBar().showMessage(msg)
 
     def closeEvent(self, event):

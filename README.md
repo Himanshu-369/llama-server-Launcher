@@ -11,11 +11,8 @@
 
 [Features](#-features) · [Installation](#-installation) · [Usage](#-usage) · [Screenshots](#-screenshots) · [Demo](#-demo-video) · [Parameters](#-parameters) · [FAQ](#-faq)
 
-</div>
-
 ---
 
-## 🖼️ Screenshots
 
 <div align="center">
    
@@ -25,6 +22,12 @@
 *( Demonstrating GUI Usage )*
 
 <br>
+
+</div>
+
+## 🖼️ Screenshots
+
+<div align="center">
 
 ## Dark Mode
 <!-- Add your screenshot below -->

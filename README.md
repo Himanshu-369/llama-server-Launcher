@@ -15,56 +15,44 @@
 
 ---
 
----
-<img width="1098" height="778" alt="dark-mode-2" src="https://github.com/user-attachments/assets/f7e0070c-4df2-4ebe-a94d-3672dfe2471b" />
-<img width="1100" height="810" alt="dark-mode" src="https://github.com/user-attachments/assets/5fc62fed-98fd-4ad5-947d-7764d156567f" />
-<img width="1127" height="845" alt="collapsible-parameters" src="https://github.com/user-attachments/assets/5077cc3f-0f4e-49be-a623-53eeb1e5c3e8" />
-<img width="1098" height="778" alt="light-mode" src="https://github.com/user-attachments/assets/48de2d85-7ad2-4221-b952-ba9d2d00561c" />
-
----
-
 ## 🖼️ Screenshots
 
 <div align="center">
-
-### Dark Mode
-<!-- Add your screenshot below -->
-![Dark Mode Screenshot](docs/screenshots/dark-mode.png)
-*The default dark theme with the full interface layout*
-
-<br>
-
-### Light Mode
-<!-- Add your screenshot below -->
-![Light Mode Screenshot](docs/screenshots/light-mode.png)
-*Clean light theme for bright environments*
-
-<br>
-
-### Collapsible Advanced Parameters
-<!-- Add your screenshot below -->
-![Parameters Expanded](docs/screenshots/parameters-expanded.png)
-*Organized parameter sections with expand/collapse functionality*
-
-<br>
-
-### Search & Filter
-<!-- Add your screenshot below -->
-![Search Filter](docs/screenshots/search-filter.png)
-*Quickly find any parameter by name or description*
-
-<img width="1127" height="845" alt="search-filter" src="https://github.com/user-attachments/assets/9bd64af2-88d7-46b3-a657-de568c2459a5" />
-</div>
-
-> **📌 Note:** Replace the placeholder image paths above with your actual screenshots. Store them in `docs/screenshots/` directory.
-
----
-
+   
 ## 🎥 Demo Video
+<!-- Add your video below -->
+![video-demo](screenshots/video-demo.gif)
+*( Demonstrating GUI Usage )*
 
-<div align="center">
+<br>
 
-![video-demo](https://github.com/user-attachments/assets/d80093a3-7d52-4a8f-bac9-b50d303d788c)
+## Dark Mode
+<!-- Add your screenshot below -->
+![Dark Mode Screenshot](screenshots/dark-mode.png)
+*( The default dark theme with the full interface layout )*
+
+<br>
+
+## Light Mode
+<!-- Add your screenshot below -->
+![Light Mode Screenshot](screenshots/light-mode.png)
+*( Clean light theme for bright environments )*
+
+<br>
+
+## Collapsible Advanced Parameters
+<!-- Add your screenshot below -->
+![Parameters Expanded](screenshots/collapsible-parameters.png)
+*( Organized parameter sections with expand/collapse functionality )*
+
+<br>
+
+## Search & Filter
+<!-- Add your screenshot below -->
+![Search Filter](screenshots/search-filter.png)
+*( Quickly find any parameter by name or description )*
+
+<br>
 
 </div>
 
@@ -114,8 +102,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/llama-server-launcher.git
-cd llama-server-launcher
+git clone https://github.com/Himanshu-369/llama-server-Launcher.git
+cd llama-server-Launcher
 
 # Create virtual environment (recommended)
 python -m venv venv
@@ -148,13 +136,13 @@ cmake --build build --config Release -j
 ### Quick Start
 
 ```bash
-python llama-launcher.py
+python llama-server-Launcher.py
 ```
 
 ### Step-by-Step Guide
 
 1. **Set Executable Path**
-   - Click **Browse** to locate your `llama-server` binary
+   - Click **Browse** to locate your `llama-server-Launcher` binary
    - Or click **Auto-detect** to search your PATH
 
 2. **Select Model**
@@ -451,7 +439,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [llama.cpp](https://github.com/ggerganov/llama.cpp) — The underlying server
 - [PyQt6](https://www.riverbankcomputing.com/software/pyqt/) — Qt Python bindings
-- [JetBrains](https://www.jetbrains.com/) — JetBrains Mono font
+- [JetBrains](https://www.jetbrains.com/lp/mono/) — JetBrains Mono font
 
 ---
 
